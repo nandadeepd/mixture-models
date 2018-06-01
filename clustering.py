@@ -23,7 +23,8 @@ from scipy.stats import multivariate_normal
 FILENAME = 'GMM_dataset.txt'
 CLUSTERS = 5
 PLOTS = './'
-ITERATIONS = 10
+ITERATIONS = 20
+TETHA = 0.5
 
 
 class GMM(object):
@@ -101,9 +102,8 @@ class GMM(object):
 				likelihood += prior * self.gaussian(point, mean, covariance)
 				# pprint("likelihood = {}".format(likelihood))
 			self.loglikelihoods.append(numpy.log(likelihood))
+		return self.loglikelihoods
 
-		# 	plotter.scatter(points[:, 0], points[:, 1], color = next(self.colors))
-		# plotter.show()
 
 
 	def findProbs(self, point, means, covariances):
@@ -112,43 +112,47 @@ class GMM(object):
 			p.append(self.gaussian(point, mean, covariance))
 		return p
 
+	def plotClusters(self, assignments, iteration):
+		for key, cluster in assignments.items():
+			cluster = numpy.array(cluster)
+			plotter.scatter(cluster[:, 0], cluster[:, 1], color = next(self.colors))
+		# plotter.show()
+		plotter.savefig("gmm" + str(iteration) + '.png')
+
 
 	def run(self, loglikelihoods):
+		converged = False
+		iters = 1
 
-		# if iters = self.iterations:
-		# 	return "\n Ran out of iterations"
+		while not converged:
+			new_assignments = dict()  # reflects the same format?
 
-		new_assignments = dict()  # reflects the same format?
+			old_means = [clusterProps[0] for clusterProps in self.assignments.values()]
+			old_covariances = [clusterProps[1] for clusterProps in self.assignments.values()]
 
-		old_means = [clusterProps[0] for clusterProps in self.assignments.values()]
-		old_covariances = [clusterProps[1] for clusterProps in self.assignments.values()]
+			for point in self.dataset:
 
-		# pprint(len(old_covariances))
-		# pprint(len(old_means))
+				probability_point = self.findProbs(point, old_means, old_covariances)
+				max_probab = numpy.argmax(probability_point)
+				# pprint("testing insert index {}".format(numpy.argmax(probability_point)))
 
-		for point in self.dataset:
+				if max_probab not in new_assignments:
+					new_assignments[max_probab] = list()
+				new_assignments[max_probab].append(point)
 
-			probability_point = self.findProbs(point, old_means, old_covariances)
-			max_probab = numpy.argmax(probability_point)
-			# pprint("testing insert index {}".format(numpy.argmax(probability_point)))
+			self.plotClusters(new_assignments, iters)
 
-			if max_probab not in new_assignments:
-				new_assignments[max_probab] = list()
-			new_assignments[max_probab].append(point)
+			# compute error rates
 
-		
+			# send to init
+			mod_ass = self.initialization(new_assignments)
+			new_ll = self.computeLogLikelihoods(mod_ass)
 
-		# pprint(len(new_assignments))
+			# pprint(new_ll)
+			iters += 1
 
-
-
-	
-
-
-
-
-
-
+			if iters == self.iterations:
+				converged = True
 
 
 class KMeans(object):
