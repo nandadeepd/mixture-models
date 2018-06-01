@@ -5,8 +5,12 @@ davuluru@pdx.edu
 CS 546 - Advanced Machine learning, Spring 2018
 Instructor - Anthony Rhodes
 
-Implementing K-means algorithm recursively. 
+Following Expectation maximization to:
+1. Implement K-means algorithm recursively. 
+2. Gaussian Mixture Models 
 '''
+
+
 import numpy, sys, itertools
 import matplotlib.pyplot as plotter
 from scipy.spatial import distance
@@ -21,17 +25,19 @@ CLUSTERS = 5
 PLOTS = './'
 
 
+
 class GMM(object):
 
-	def __init__(self, path, num_clusters):
+	def __init__(self, path, num_clusters, iterations):
 		self.dataset = numpy.loadtxt(fname = path)
 		self.colors = itertools.cycle(5 * ["r", "g", "c", "b", "k"])
 		# assignments should be of the format -> cluster: [mean, cov, cluster points]
 		self.assignments = dict()
 		self.num_clusters = num_clusters
+		self.loglikelihoods = list()
+		self.priors = list()
+		self.iterations = iterations
 
-	def getData(self):
-		return self.dataset
 
 	def choosePoints(self):
 		indices = [numpy.random.randint(0, self.dataset.shape[0]) for _ in range(self.num_clusters)]
@@ -42,44 +48,84 @@ class GMM(object):
 		self.centers = self.pointToList(x, y)
 		return x, y
 
-	# computeCovariance = lambda self, one, two : numpy.cov(one, two)
+
+
+	# helper functions!
+	getData = lambda self : self.dataset
+	getll = lambda self : self.loglikelihoods
 	pointToList = lambda self, x, y : [(xc, yc) for xc, yc in zip(x, y)]
+	gaussian = lambda self, point, mean, covariance : multivariate_normal.pdf(point, mean, covariance)
+	computeCovariance = lambda self, cluster : numpy.cov(cluster, rowvar = False)
+	responsibility = lambda self, whichCluster : self.loglikelihoods[whichCluster]/sum(self.loglikelihoods)
 
-	def computeGaussianProbability(self, point, mean, covariance):
 
-		# pprint("mean: {}".format(mean))
-		# pprint("covariance: {}".format(covariance.shape))
-		# pprint("point: {}".format(point))
+	# Not currently used. 
+	def computeGaussianProbability(self, point, mean, covariance, prior_cluster):
 
 		numerator = numpy.exp(-((point - mean).T * (point - mean) * (numpy.linalg.inv(covariance))) / 2)
 		denominator = (numpy.sqrt(numpy.power((2 * numpy.pi), 2) * numpy.linalg.det(covariance)))
-		return numerator / denominator
+		# print("\n gaussian - {}".format(prior_cluster * (numerator / denominator)))
+		pprint((numerator/denominator).shape)
 
-	computeGaussian = lambda self, point, mean, covariance : multivariate_normal.pdf(mean, covariance, point)
+		return prior_cluster * (numerator / denominator)
 
-	def computeClusterMean(self, cluster):
-		# print(type(cluster), cluster)
-		cluster = numpy.array(cluster)
-		Xmean = sum(cluster[:, 0]) / cluster.shape[0]
-		Ymean = sum(cluster[:, 1]) / cluster.shape[0]
-		return (Xmean, Ymean)
+	
+	# Init step after receiving clusters from K-means
+	def initialization(self, assignments):
+
+		for idx, (initCenters, initClusters) in enumerate(assignments.items()):
+			initClusters = numpy.array(initClusters)
+			initMean = ((sum(initClusters[:, 0]) / initClusters.shape[0]), ((sum(initClusters[:, 1]) / initClusters.shape[0])))
+			initCovariance = self.computeCovariance(initClusters)
+			assert(initCovariance.shape == (2,2))
+			self.assignments[idx] = [initMean, initCovariance, initClusters]
+		return self.assignments
+
+	# computing log likelihoods
+	def computeLogLikelihoods(self, assignments):
+
+		for cluster in assignments.values():
+			points = cluster[2]
+			mean = cluster[0]
+			covariance = cluster[1]
+
+			assert(covariance.shape == (2,2))
+
+			prior = len(points) / len(self.dataset)
+			self.priors.append(prior)
+			# pprint("mean for cluster {}".format(mean))
+			# pprint("prior for cluster {}".format(prior))
+			likelihood = 0.0
+			for point in points:
+				likelihood += prior * self.gaussian(point, mean, covariance)
+				# pprint("likelihood = {}".format(likelihood))
+			self.loglikelihoods.append(numpy.log(likelihood))
+
+		# 	plotter.scatter(points[:, 0], points[:, 1], color = next(self.colors))
+		# plotter.show()
 
 
-	computeCovariance = lambda self, cluster : numpy.cov(cluster, rowvar = False)
 
-	def iterClusters(self, assignments):
 
-		centers = list(assignments.keys())
-		for center, cluster in assignments.items():
-			mean = self.computeClusterMean(cluster)
-			covariance = self.computeCovariance(cluster)
-			for point in cluster:
+	def run(self):
 
-				center_probabilities = [self.computeGaussianProbability(point, mean, covariance) for _ in centers]
-				max_center_probability = numpy.argmax(center_probabilities)
-				pprint(centers[max_center_probability])
+		# if iters = self.iterations:
+		# 	return "\n Ran out of iterations"
 
-				# now do the assignments. 
+		for point in self.dataset:
+
+			soft_assignments_point = []
+			for idx, clusterProps in enumerate(self.assignments.values()):
+
+
+
+
+	
+
+
+
+
+
 
 
 
@@ -190,20 +236,15 @@ def main():
 
 	print("The stopping reason: {}".format(message))
 
-	gmm = GMM(FILENAME, 5)
-	# dataset = gmm.getData()
-	x, y = gmm.choosePoints()
-	gmm.iterClusters(assignments)
+	gmm = GMM(FILENAME, 5, 10)
 
-	# send these clusters and centers to GMM.
+	initAss = gmm.initialization(assignments)
 
+	gmm.computeLogLikelihoods(initAss)
 
-
-
-
+	gmm.run()
+	# pprint(gmm.getll())
 
 
 if __name__ == '__main__':
 	main()
-
-
