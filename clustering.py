@@ -23,7 +23,7 @@ from scipy.stats import multivariate_normal
 FILENAME = 'GMM_dataset.txt'
 CLUSTERS = 5
 PLOTS = './'
-
+ITERATIONS = 10
 
 
 class GMM(object):
@@ -59,6 +59,9 @@ class GMM(object):
 	responsibility = lambda self, whichCluster : self.loglikelihoods[whichCluster]/sum(self.loglikelihoods)
 
 
+	def getStuff(self, cluster):
+		return cluster[0], cluster[1], cluster[2]
+
 	# Not currently used. 
 	def computeGaussianProbability(self, point, mean, covariance, prior_cluster):
 
@@ -85,9 +88,7 @@ class GMM(object):
 	def computeLogLikelihoods(self, assignments):
 
 		for cluster in assignments.values():
-			points = cluster[2]
-			mean = cluster[0]
-			covariance = cluster[1]
+			mean, covariance, points = self.getStuff(cluster)
 
 			assert(covariance.shape == (2,2))
 
@@ -105,18 +106,39 @@ class GMM(object):
 		# plotter.show()
 
 
+	def findProbs(self, point, means, covariances):
+		p = []
+		for mean, covariance in zip(means, covariances):
+			p.append(self.gaussian(point, mean, covariance))
+		return p
 
 
-	def run(self):
+	def run(self, loglikelihoods):
 
 		# if iters = self.iterations:
 		# 	return "\n Ran out of iterations"
 
+		new_assignments = dict()  # reflects the same format?
+
+		old_means = [clusterProps[0] for clusterProps in self.assignments.values()]
+		old_covariances = [clusterProps[1] for clusterProps in self.assignments.values()]
+
+		# pprint(len(old_covariances))
+		# pprint(len(old_means))
+
 		for point in self.dataset:
 
-			soft_assignments_point = []
-			for idx, clusterProps in enumerate(self.assignments.values()):
+			probability_point = self.findProbs(point, old_means, old_covariances)
+			max_probab = numpy.argmax(probability_point)
+			# pprint("testing insert index {}".format(numpy.argmax(probability_point)))
 
+			if max_probab not in new_assignments:
+				new_assignments[max_probab] = list()
+			new_assignments[max_probab].append(point)
+
+		
+
+		# pprint(len(new_assignments))
 
 
 
@@ -236,13 +258,13 @@ def main():
 
 	print("The stopping reason: {}".format(message))
 
-	gmm = GMM(FILENAME, 5, 10)
+	gmm = GMM(FILENAME, CLUSTERS, ITERATIONS)
 
 	initAss = gmm.initialization(assignments)
 
 	gmm.computeLogLikelihoods(initAss)
-
-	gmm.run()
+	old_ll = gmm.getll() 
+	gmm.run(old_ll)
 	# pprint(gmm.getll())
 
 
